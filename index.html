@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KaltimFauna AI</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.4/dist/teachablemachine-image.min.js"></script>
+
+<style>
+ body {
+  
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  /* Background baru dari folder IMG */
+  background:
+    linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)),
+    url('IMG/baground-enggang.jpeg') center / cover no-repeat;
+  color: #e0ffe0;
+  min-height: 100vh;
+  overflow-y: auto;
+  
+}
+
+
+
+/* HEADER */
+header{text-align:center;padding:16px 10px;}
+header h1{margin:4px;font-size:2.3em;}
+header p{margin:0;font-size:.95em}
+
+/* LAYOUT */
+.main-layout{
+  display:grid;
+  grid-template-columns:1fr 2fr 1fr;
+  gap:16px;
+  padding:16px 18px 30px;
+}
+
+/* GLASS */
+.glass{
+  background:rgba(0,0,0,.45);
+  backdrop-filter:blur(12px);
+  border-radius:20px;
+  padding:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.65);
+}
+
+/* PREDIKSI */
+.prediction-item{
+  font-size:.88em;
+  padding:6px 10px;
+  margin-bottom:6px;
+  background:rgba(0,0,0,.45);
+  border-radius:10px;
+  display:flex;
+  justify-content:space-between;
+}
+.prediction-item.highlight{
+  background:linear-gradient(135deg,#38b000,#74c69d);
+  color:#fff;
+}
+
+/* KAMERA */
+.container{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+button{
+  background:linear-gradient(135deg,#38b000,#74c69d);
+  border:none;
+  color:#fff;
+  padding:12px 22px;
+  border-radius:16px;
+  font-weight:600;
+  cursor:pointer;
+}
+#webcam-container{
+  width:100%;
+  display:flex;
+  justify-content:center;
+}
+#webcam-container canvas{
+  width:100%;
+  max-width:520px;
+  aspect-ratio:1/1;
+  border-radius:24px;
+  border:4px solid rgba(255,255,255,.6);
+}
+.label-item{
+  font-size:.82em;
+  margin-top:4px;
+}
+
+/* INFO HEWAN */
+.animal-card{
+  font-size:.88em;
+  line-height:1.45;
+}
+.animal-card h4{margin:8px 0;color:#b4ffb4;}
+.animal-card p{margin:4px 0;}
+.badge{
+  font-size:.75em;
+  padding:4px 10px;
+  border-radius:10px;
+}
+.badge.endemik{background:#2d6a4f}
+
+/* FOOTER */
+footer{text-align:center;font-size:.8em;opacity:.85;padding-bottom:20px;}
+
+/* ANIMASI */
+@keyframes pulseShake {
+  0%   { transform: scale(1) rotate(0deg); box-shadow: 0 0 10px rgba(180,255,180,.6); }
+  25%  { transform: scale(1.05) rotate(-1deg); }
+  50%  { transform: scale(1.1) rotate(1deg); box-shadow: 0 0 25px rgba(120,255,180,1); }
+  75%  { transform: scale(1.05) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.final-result strong{
+  display:inline-block;
+  padding:6px 14px;
+  border-radius:14px;
+  background:linear-gradient(135deg,#2d6a4f,#74c69d);
+  animation:pulseShake 0.9s infinite;
+  color:#fff;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(circle at top left, rgba(180,255,180,.15), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(120,255,200,.12), transparent 45%);
+  pointer-events:none;
+  z-index:0;
+}
+
+.glass{
+  position:relative;
+  overflow:hidden;
+}
+
+.glass::after{
+  content:"🌿";
+  position:absolute;
+  top:-10px;
+  right:12px;
+  font-size:1.4em;
+  opacity:.25;
+}
+
+.prediction-item.highlight{
+  animation:pulseShake 0.8s infinite;
+}
+
+</style>
+</head>
+
+<body>
+
+
+<audio id="bg-music" loop>
+  <source src="AUDIO/kaltim-instrumental.mp3.mp3" type="audio/mpeg">
+</audio>
+
+<header>
+  <div>🐬 🦧🐻🐆🦜🐒</div>
+  <h1>🌿 KaltimFauna AI</h1>
+  <p>Deteksi Hewan Endemik Kalimantan Timur</p>
+</header>
+
+
+<div class="main-layout">
+
+<div class="glass">
+  <h3 style="text-align:center;">📊 Prediksi</h3>
+  <div id="prediction-card"></div>
+  <div class="final-result" style="text-align:center;margin-top:8px;">
+    Terdeteksi: <strong>---</strong>
+  </div>
+</div>
+
+<div class="glass container">
+  <button id="start-btn">Aktifkan Kamera</button>
+
+  <button id="capture-btn" style="margin-top:10px;">
+    📸 Tangkap Gambar
+  </button>
+
+  <button id="reset-btn" style="margin-top:10px; display:none;">
+    🔁 Ambil Gambar Lagi
+  </button>
+
+  <div id="webcam-container"></div>
+
+  <canvas id="capture-canvas"
+          width="480"
+          height="480"
+          style="display:none;"></canvas>
+
+  <div id="label-container"></div>
+  <div id="result" style="margin-top:6px;"></div>
+</div>
+
+<div class="glass" id="info">
+  <h3 style="text-align:center;">🐾 Informasi Hewan</h3>
+  <p>Belum ada hewan terdeteksi</p>
+</div>
+
+</div>
+
+<footer>
+© 2026 | Proyek AI Edukasi Fauna Kalimantan Timur
+</footer>
+
+<script>
+const URL = "https://teachablemachine.withgoogle.com/models/1NN9o-LzL/";
+let model, webcam, maxPredictions, running = false;
+
+const animalInfo = {
+
+"pesut mahakam (orcaella brevirostris)": {
+  latin: "Orcaella brevirostris",
+  status: "Kritis (CR)",
+  iucn: "Critically Endangered",
+  family: "Delphinidae",
+  scientificClass: "Mamalia",
+  habitat: "Sungai air tawar dan muara",
+  food: "Ikan kecil dan udang",
+  size: "±2,5 m | ±130 kg",
+  lifespan: "±30 tahun",
+  activity: "Diurnal",
+  behavior: "Hidup berkelompok kecil",
+  population: "< 100 ekor",
+  role: "Indikator kesehatan sungai",
+  threat: "Pencemaran & jaring nelayan",
+  conservation: "Perlindungan habitat sungai",
+  legalStatus: "Dilindungi penuh",
+  fact: "Salah satu lumba-lumba air tawar paling langka di dunia",
+  desc: "Lumba-lumba air tawar endemik Sungai Mahakam."
+},
+
+"orang utan (pongo pygmaeus)": {
+  latin: "Pongo pygmaeus",
+  status: "Terancam Punah (EN)",
+  iucn: "Endangered",
+  family: "Hominidae",
+  scientificClass: "Mamalia",
+  habitat: "Hutan hujan tropis",
+  food: "Buah, daun, serangga",
+  size: "±1,4 m | ±90 kg",
+  lifespan: "35–45 tahun",
+  activity: "Diurnal",
+  behavior: "Soliter dan sangat cerdas",
+  population: "±104.000 ekor (menurun)",
+  role: "Penyebar biji alami",
+  threat: "Deforestasi & perburuan",
+  conservation: "Rehabilitasi & kawasan konservasi",
+  legalStatus: "Dilindungi UU No. 5 Tahun 1990",
+  fact: "Berbagi DNA ±97% dengan manusia",
+  desc: "Primata besar khas Kalimantan."
+},
+
+"beruang madu (helarctos malayanus)": {
+  latin: "Helarctos malayanus",
+  status: "Rentan (VU)",
+  iucn: "Vulnerable",
+  family: "Ursidae",
+  scientificClass: "Mamalia",
+  habitat: "Hutan hujan tropis",
+  food: "Buah, madu, serangga",
+  size: "±1,5 m | ±65 kg",
+  lifespan: "±25 tahun",
+  activity: "Nokturnal",
+  behavior: "Soliter dan pemalu",
+  population: "Tidak diketahui pasti",
+  role: "Pengendali populasi serangga",
+  threat: "Perusakan habitat & perburuan",
+  conservation: "Perlindungan hutan",
+  legalStatus: "Dilindungi",
+  fact: "Beruang terkecil di dunia",
+  desc: "Beruang terkecil di dunia."
+},
+
+"rangkong badak (buceros rhinoceros)": {
+  latin: "Buceros rhinoceros",
+  status: "Rentan (VU)",
+  iucn: "Vulnerable",
+  family: "Bucerotidae",
+  scientificClass: "Aves",
+  habitat: "Hutan hujan tropis",
+  food: "Buah dan serangga",
+  size: "±1,2 m",
+  lifespan: "±35 tahun",
+  activity: "Diurnal",
+  behavior: "Hidup berpasangan",
+  population: "Menurun",
+  role: "Penyebar biji hutan",
+  threat: "Penebangan hutan",
+  conservation: "Perlindungan satwa",
+  legalStatus: "Dilindungi",
+  fact: "Simbol budaya Dayak",
+  desc: "Burung ikonik Kalimantan."
+},
+
+"macan dahan kalimantan (neofelis diardi borneensis)": {
+  latin: "Neofelis diardi borneensis",
+  status: "Terancam Punah (EN)",
+  iucn: "Endangered",
+  family: "Felidae",
+  scientificClass: "Mamalia",
+  habitat: "Hutan lebat",
+  food: "Mamalia kecil dan burung",
+  size: "±1 m | ±25 kg",
+  lifespan: "±17 tahun",
+  activity: "Nokturnal",
+  behavior: "Pemanjat pohon ulung",
+  population: "Sangat jarang",
+  role: "Predator puncak",
+  threat: "Deforestasi & perburuan",
+  conservation: "Perlindungan habitat",
+  legalStatus: "Dilindungi",
+  fact: "Memiliki taring terpanjang di antara kucing",
+  desc: "Kucing liar pemanjat ulung."
+},
+
+"paok kepala biru (hydrornis baudii)": {
+  latin: "Hydrornis baudii",
+  status: "Rentan (VU)",
+  iucn: "Vulnerable",
+  family: "Pittidae",
+  scientificClass: "Aves",
+  habitat: "Hutan dataran rendah",
+  food: "Serangga kecil",
+  size: "±25 cm",
+  lifespan: "±10 tahun",
+  activity: "Diurnal",
+  behavior: "Pemalu dan jarang terlihat",
+  population: "Sangat terbatas",
+  role: "Pengendali serangga",
+  threat: "Hilangnya habitat",
+  conservation: "Pelestarian hutan",
+  legalStatus: "Dilindungi",
+  fact: "Salah satu burung paling langka di Kalimantan",
+  desc: "Burung endemik berkepala biru."
+},
+
+"lutung kutai (presbytis hosei canicrus)": {
+  latin: "Presbytis hosei canicrus",
+  status: "Terancam Punah (EN)",
+  iucn: "Endangered",
+  family: "Cercopithecidae",
+  scientificClass: "Mamalia",
+  habitat: "Hutan tropis",
+  food: "Daun dan buah",
+  size: "±55 cm",
+  lifespan: "±20 tahun",
+  activity: "Diurnal",
+  behavior: "Hidup berkelompok",
+  population: "Terbatas",
+  role: "Penyeimbang vegetasi",
+  threat: "Fragmentasi hutan",
+  conservation: "Konservasi kawasan",
+  legalStatus: "Dilindungi",
+  fact: "Endemik Kalimantan Timur",
+  desc: "Primata endemik Kalimantan Timur."
+},
+
+"kucing merah (catopuma badia)": {
+  latin: "Catopuma badia",
+  status: "Terancam Punah (EN)",
+  iucn: "Endangered",
+  family: "Felidae",
+  scientificClass: "Mamalia",
+  habitat: "Hutan hujan tropis",
+  food: "Mamalia kecil",
+  size: "±70 cm",
+  lifespan: "±15 tahun",
+  activity: "Nokturnal",
+  behavior: "Sangat pemalu",
+  population: "Sangat langka",
+  role: "Predator hutan",
+  threat: "Perusakan habitat",
+  conservation: "Perlindungan habitat",
+  legalStatus: "Dilindungi",
+  fact: "Sangat jarang tertangkap kamera",
+  desc: "Kucing liar langka Kalimantan."
+}
+
+};
+  async function loop() {
+  if (!freeze) {
+    webcam.update();
+    await predict();
+  }
+  requestAnimationFrame(loop);
+}
+
+
+async function predict() {
+  const prediction = await model.predict(webcam.canvas);
+  let top = prediction.reduce((max, p) => p.probability > max.probability ? p : max, prediction[0]);
+  const sorted = [...prediction].sort((a,b)=>b.probability-a.probability);
+  sorted.forEach((p,i)=>{
+    const labelDiv = document.getElementById("label-container").children[i];
+    if(labelDiv) labelDiv.innerText = `${p.className} ${(p.probability*100).toFixed(1)}%`;
+  });
+
+  const card = document.getElementById("prediction-card");
+  card.innerHTML = "";
+  sorted.forEach(p=>{
+    const d = document.createElement("div");
+    d.className="prediction-item";
+    if(p.className===top.className) d.classList.add("highlight");
+    d.innerHTML=`${p.className} <span>${(p.probability*100).toFixed(1)}%</span>`;
+    card.appendChild(d);
+  });
+
+  document.querySelector(".final-result").innerHTML=`Terdeteksi: <strong>${top.className}</strong>`;
+  document.getElementById("result").innerText=`Terdeteksi: ${top.className} (${(top.probability*100).toFixed(1)}%)`;
+
+  const info=document.getElementById("info");
+  const key = top.className.toLowerCase();
+  if(animalInfo[key]){
+    const a = animalInfo[key];
+    info.innerHTML=`<h3 style="text-align:center;">🐾 Informasi Hewan</h3>
+      <div class="animal-card">
+      <span class="badge endemik">Endemik</span>
+      <h4>${top.className}</h4>
+      <p><b>Nama Latin:</b> ${a.latin}</p>
+      <p><b>Kelas:</b> ${a.scientificClass}</p>
+      <p><b>Famili:</b> ${a.family}</p>
+      <p><b>Status Konservasi:</b> ${a.status}</p>
+      <p><b>Status IUCN:</b> ${a.iucn}</p>
+      <p><b>Habitat:</b> ${a.habitat}</p>
+      <p><b>Pola Makan:</b> ${a.food}</p>
+      <p><b>Ukuran:</b> ${a.size}</p>
+      <p><b>Umur:</b> ${a.lifespan}</p>
+      <p><b>Aktivitas:</b> ${a.activity}</p>
+      <p><b>Perilaku:</b> ${a.behavior}</p>
+      <p><b>Populasi:</b> ${a.population}</p>
+      <p><b>Peran Ekosistem:</b> ${a.role}</p>
+      <p><b>Ancaman:</b> ${a.threat}</p>
+      <p><b>Upaya Konservasi:</b> ${a.conservation}</p>
+      <p><b>Status Hukum:</b> ${a.legalStatus}</p>
+      <p><b>Fakta Menarik:</b> ${a.fact}</p>
+      <p style="margin-top:8px;"><i>${a.desc}</i></p>
+      </div>`;
+  }
+}
+
+const btn = document.getElementById("start-btn");
+const resetBtn = document.getElementById("reset-btn");
+const bgMusic = document.getElementById("bg-music");
+bgMusic.volume = 0.2;
+
+async function startWebcamAndModel(){
+  if(running) return;
+  running = true;
+  btn.textContent="Memuat...";
+  try{
+    model = await tmImage.load(URL+"model.json", URL+"metadata.json");
+    maxPredictions = model.getTotalClasses();
+    webcam = new tmImage.Webcam(480,480,true);
+    await webcam.setup({facingMode:"user"});
+    await webcam.play();
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+    const labelContainer = document.getElementById("label-container");
+    labelContainer.innerHTML="";
+    for(let i=0;i<maxPredictions;i++){
+      const d=document.createElement("div");
+      d.className="label-item";
+      labelContainer.appendChild(d);
+    }
+
+    btn.textContent="Kamera Aktif";
+    loop();
+  } catch(err){
+    console.error("Error load model atau webcam:",err);
+    btn.textContent="Aktifkan Kamera";
+    alert("Tidak bisa mengakses kamera. Pastikan izin diberikan dan buka lewat Live Server/HTTPS.");
+    running=false;
+  }
+}
+
+btn.addEventListener("click",()=>{
+  bgMusic.currentTime=0;
+  bgMusic.play().catch(e=>console.log("Audio error:",e));
+  startWebcamAndModel();
+});
+
+const captureBtn = document.getElementById("capture-btn");
+const captureCanvas = document.getElementById("capture-canvas");
+const captureCtx = captureCanvas.getContext("2d");
+
+let freeze = false;
+let frozenImage = null;
+
+captureBtn.addEventListener("click", async () => {
+  resetBtn.addEventListener("click", () => {
+  freeze = false;                 // hidupkan loop lagi
+  captureBtn.textContent = "📸 Tangkap Gambar";
+  resetBtn.style.display = "none";
+});
+  if (!webcam) return;
+
+  // ambil gambar dari webcam
+  captureCtx.drawImage(webcam.canvas, 0, 0, 480, 480);
+  frozenImage = captureCanvas;
+
+ freeze = true;
+captureBtn.textContent = "✅ Gambar Ditangkap";
+resetBtn.style.display = "block";
+
+
+  // langsung prediksi dari gambar
+  await predictFromImage(frozenImage);
+});
+
+async function predictFromImage(image) {
+  const prediction = await model.predict(image);
+
+  let top = prediction.reduce((max, p) =>
+    p.probability > max.probability ? p : max, prediction[0]);
+
+  const sorted = [...prediction].sort((a,b)=>b.probability-a.probability);
+
+  const card = document.getElementById("prediction-card");
+  card.innerHTML = "";
+
+  sorted.forEach(p=>{
+    const d = document.createElement("div");
+    d.className="prediction-item";
+    if(p.className===top.className) d.classList.add("highlight");
+    d.innerHTML=`${p.className} <span>${(p.probability*100).toFixed(1)}%</span>`;
+    card.appendChild(d);
+  });
+
+  document.querySelector(".final-result").innerHTML =
+    `Terdeteksi: <strong>${top.className}</strong>`;
+}
+
+</script>
+
+</body>
+</html>
